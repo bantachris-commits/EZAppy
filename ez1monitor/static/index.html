@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EZ1 Monitor</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #e3e6ea;
+    --ch1: #d97706; --ch2: #2563eb; --ok: #15803d; --warn: #b91c1c; --bar: #d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --card: #1a1e24; --text: #e8eaed; --muted: #9aa3ad; --line: #2b313a;
+      --ch1: #f59e0b; --ch2: #60a5fa; --ok: #4ade80; --warn: #f87171; --bar: #f59e0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 10px;
+          border-radius: 999px; border: 1px solid var(--line); background: var(--card); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .online .dot { background: var(--ok); } .offline .dot { background: var(--warn); }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .value small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .meter { height: 6px; background: var(--line); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .meter > div { height: 100%; background: var(--ch1); width: 0; transition: width .4s; }
+  .split { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  section.card { margin-top: 12px; }
+  section h2 { font-size: 14px; margin: 0 0 8px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .tabs button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: transparent; color: var(--muted);
+                 padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+  .tabs button.on { color: var(--text); border-color: var(--muted); }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--muted); font-size: 11px; }
+  .gridline { stroke: var(--line); stroke-width: 1; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  .alarms { display: flex; flex-wrap: wrap; gap: 8px; }
+  .alarm { font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); }
+  .alarm.bad { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+  .alarm.good { color: var(--muted); }
+  .info { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 13px; }
+  .info dt { color: var(--muted); } .info dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .two { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+  #tip { position: fixed; pointer-events: none; background: var(--card); border: 1px solid var(--line);
+         border-radius: 6px; padding: 4px 8px; font-size: 12px; display: none; z-index: 5; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>EZ1 Monitor</h1>
+    <span id="status" class="pill"><span class="dot"></span><span id="statusText">Connecting…</span></span>
+    <span class="sub" id="updated"></span>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Power now</div>
+      <div class="value" id="power">–<small>W</small></div>
+      <div class="meter"><div id="meter"></div></div>
+      <div class="split">
+        <span><i class="sw" style="background:var(--ch1)"></i>Panel 1 <b id="p1">–</b> W</span>
+        <span><i class="sw" style="background:var(--ch2)"></i>Panel 2 <b id="p2">–</b> W</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Today</div>
+      <div class="value" id="today">–<small>kWh</small></div>
+      <div class="split" id="peak"></div>
+    </div>
+    <div class="card">
+      <div class="label">Lifetime</div>
+      <div class="value" id="life">–<small>kWh</small></div>
+    </div>
+    <div class="card">
+      <div class="label">Output limit</div>
+      <div class="value" id="limit">–<small>W</small></div>
+      <div class="split" id="onoff"></div>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2><span>Power</span>
+      <span class="tabs" id="rangeTabs">
+        <button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="168">7 d</button>
+      </span>
+    </h2>
+    <div id="powerChart"></div>
+  </section>
+
+  <section class="card">
+    <h2><span>Daily energy</span>
+      <span class="tabs" id="dayTabs"><button data-d="14" class="on">14 d</button><button data-d="30">30 d</button><button data-d="90">90 d</button></span>
+    </h2>
+    <div id="dailyChart"></div>
+  </section>
+
+  <div class="two">
+    <section class="card"><h2>Alarms</h2><div class="alarms" id="alarms"><span class="sub">No data yet</span></div></section>
+    <section class="card"><h2>Device</h2><dl class="info" id="device"><dt>—</dt><dd></dd></dl></section>
+  </div>
+</main>
+<div id="tip"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (n, d = 0) => Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+let hours = 24, days = 14;
+const tip = $("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block";
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (e.clientY + 12) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+
+async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error(r.status); return r.json(); }
+
+async function refreshStatus() {
+  let s;
+  try { s = await getJSON("/api/status"); }
+  catch { $("status").className = "pill offline"; $("statusText").textContent = "Dashboard server not reachable"; return; }
+  const last = s.last;
+  $("status").className = "pill " + (s.online ? "online" : "offline");
+  $("statusText").textContent = s.online ? "Online" :
+    (last ? "Inverter offline (normal at night)" : "Can't reach inverter");
+  $("status").title = s.error || "";
+  $("updated").textContent = s.online ? "Updated " + new Date(last.time).toLocaleTimeString()
+    : (last ? "Last reading " + new Date(last.time).toLocaleString() : (s.error || ""));
+  if (!last) return;
+  const o = last.output, cap = last.max_power || last.device.max_power || 800;
+  const p = s.online ? o.power : 0;
+  $("power").innerHTML = fmt(p) + "<small>W</small>";
+  $("p1").textContent = fmt(s.online ? o.p1 : 0); $("p2").textContent = fmt(s.online ? o.p2 : 0);
+  $("meter").style.width = Math.min(100, p / cap * 100) + "%";
+  $("today").innerHTML = fmt(o.energy_today, 2) + "<small>kWh</small>";
+  $("life").innerHTML = fmt(o.energy_lifetime, 1) + "<small>kWh</small>";
+  $("limit").innerHTML = fmt(last.max_power) + "<small>W</small>";
+  $("onoff").textContent = last.on ? "Inverter switched on" : "Inverter switched OFF";
+  const names = { off_grid: "Off-grid", dc1_short_circuit: "DC1 short circuit", dc2_short_circuit: "DC2 short circuit", output_fault: "Output fault" };
+  $("alarms").innerHTML = Object.entries(last.alarms).map(([k, v]) =>
+    `<span class="alarm ${v ? "bad" : "good"}">${v ? "⚠ " : "✓ "}${names[k] || k}</span>`).join("");
+  const d = last.device;
+  $("device").innerHTML = [["Device ID", d.device_id], ["Firmware", d.firmware], ["IP", d.ip], ["Wi-Fi", d.ssid],
+    ["Power range", `${fmt(d.min_power)}–${fmt(d.max_power)} W`]].map(([k, v]) => `<dt>${k}</dt><dd>${v ?? ""}</dd>`).join("");
+}
+
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+
+async function refreshPower() {
+  const rows = await getJSON("/api/history?hours=" + hours).catch(() => []);
+  const el = $("powerChart");
+  if (rows.length < 2) { el.innerHTML = '<div class="empty">Not enough readings yet — the chart fills in as data arrives.</div>'; return; }
+  const W = 1000, H = 260, L = 44, R = 10, T = 10, B = 26;
+  const t1 = Date.now() / 1000, t0 = t1 - hours * 3600;
+  const ymax = niceMax(Math.max(...rows.map(r => r.power)) * 1.05);
+  const x = t => L + (t - t0) / (t1 - t0) * (W - L - R), y = v => T + (1 - v / ymax) * (H - T - B);
+  // break the line where readings are missing (inverter off at night)
+  const gap = Math.max(300, hours * 3600 / 200);
+  const path = key => { let d = "", prev = null; for (const r of rows) {
+      d += (prev === null || r.ts - prev > gap ? "M" : "L") + x(r.ts).toFixed(1) + "," + y(r[key]).toFixed(1); prev = r.ts; } return d; };
+  let g = "";
+  for (let i = 0; i <= 4; i++) { const v = ymax * i / 4;
+    g += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(v, v % 1 ? 1 : 0)}</text>`; }
+  const step = hours <= 6 ? 3600 : hours <= 24 ? 4 * 3600 : 86400;
+  for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) { const dt = new Date(t * 1000);
+    const lab = step === 86400 ? dt.toLocaleDateString(undefined, { weekday: "short" }) : dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    g += `<text x="${x(t)}" y="${H - 8}" text-anchor="middle">${lab}</text>`; }
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Power over time">${g}
+    <path d="${path("power")}" fill="none" stroke="var(--text)" stroke-width="2" stroke-linejoin="round" opacity=".85"/>
+    <path d="${path("p1")}" fill="none" stroke="var(--ch1)" stroke-width="1.5"/>
+    <path d="${path("p2")}" fill="none" stroke="var(--ch2)" stroke-width="1.5"/>
+    <line id="cross" class="gridline" y1="${T}" y2="${H - B}" style="display:none"/>
+    <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/></svg>
+    <div class="split"><span><i class="sw" style="background:var(--text)"></i>Total</span>
+    <span><i class="sw" style="background:var(--ch1)"></i>Panel 1</span><span><i class="sw" style="background:var(--ch2)"></i>Panel 2</span><span>Watts</span></div>`;
+  const svg = el.querySelector("svg"), cross = el.querySelector("#cross");
+  el.querySelector("#hit").addEventListener("mousemove", e => {
+    const b = svg.getBoundingClientRect(), t = t0 + ((e.clientX - b.left) * W / b.width - L) / (W - L - R) * (t1 - t0);
+    let best = rows[0]; for (const r of rows) if (Math.abs(r.ts - t) < Math.abs(best.ts - t)) best = r;
+    cross.setAttribute("x1", x(best.ts)); cross.setAttribute("x2", x(best.ts)); cross.style.display = "";
+    showTip(e, `<b>${fmt(best.power)} W</b> · ${new Date(best.ts * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}<br>Panel 1 ${fmt(best.p1)} W · Panel 2 ${fmt(best.p2)} W`);
+  });
+  el.querySelector("#hit").addEventListener("mouseleave", () => { cross.style.display = "none"; hideTip(); });
+}
+
+async function refreshDaily() {
+  const rows = await getJSON("/api/daily?days=" + days).catch(() => []);
+  const el = $("dailyChart");
+  const byDay = Object.fromEntries(rows.map(r => [r.day, r]));
+  const list = []; for (let i = days - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i);
+    const k = d.toLocaleDateString("en-CA"); list.push({ day: k, date: d, ...(byDay[k] || { energy: null }) }); }
+  if (!rows.length) { el.innerHTML = '<div class="empty">No daily totals yet.</div>'; return; }
+  const W = 1000, H = 200, L = 44, R = 10, T = 10, B = 26, n = list.length, slot = (W - L - R) / n;
+  const ymax = niceMax(Math.max(...rows.map(r => r.energy)) * 1.05), y = v => T + (1 - v / ymax) * (H - T - B);
+  let g = "";
+  for (let i = 0; i <= 4; i++) { const v = ymax * i / 4;
+    g += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(v, v % 1 ? 1 : 0)}</text>`; }
+  const every = Math.ceil(n / 15);
+  list.forEach((r, i) => { const cx = L + slot * (i + .5), bw = Math.max(2, slot * .7);
+    if (r.energy !== null) g += `<rect data-i="${i}" x="${cx - bw / 2}" y="${y(r.energy)}" width="${bw}" height="${Math.max(0, y(0) - y(r.energy))}" rx="2" fill="var(--bar)"/>`;
+    if (i % every === 0 || i === n - 1) g += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${r.date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</text>`; });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily energy">${g}</svg><div class="split"><span>kWh per day</span></div>`;
+  el.querySelectorAll("rect[data-i]").forEach(b => {
+    const r = list[+b.dataset.i];
+    b.addEventListener("mousemove", e => showTip(e, `<b>${fmt(r.energy, 2)} kWh</b> · ${r.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}<br>Peak ${fmt(r.peak_w)} W`));
+    b.addEventListener("mouseleave", hideTip);
+  });
+  const today = list[n - 1];
+  $("peak").textContent = today.energy !== null ? `Peak today ${fmt(today.peak_w)} W` : "";
+}
+
+function tabs(id, attr, set) { $(id).addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  $(id).querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); set(+b.dataset[attr]); }); }
+tabs("rangeTabs", "h", v => { hours = v; refreshPower(); });
+tabs("dayTabs", "d", v => { days = v; refreshDaily(); });
+
+function tick() { refreshStatus(); refreshPower(); refreshDaily(); }
+tick(); setInterval(tick, 15000);
+</script>
+</body>
+</html>

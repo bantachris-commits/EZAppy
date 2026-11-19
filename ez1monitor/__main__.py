@@ -23,6 +23,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="address to listen on; use 0.0.0.0 to view from other devices on your LAN")
     p.add_argument("--interval", type=float, default=15, help="seconds between readings (default 15)")
     p.add_argument("--db", default="ez1-history.sqlite3", help="history database file")
+    p.add_argument("--scan", nargs="*", metavar="NETWORK",
+                   help="search the network for EZ1 inverters and exit (optionally give e.g. 192.168.1.0/24)")
     p.add_argument("--check", action="store_true", help="read the inverter once, print it, and exit")
     p.add_argument("--demo", action="store_true", help="run against a built-in simulated inverter")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -40,8 +42,28 @@ def main(argv: list[str] | None = None) -> int:
         sim = make_server("127.0.0.1", 0, state)
         threading.Thread(target=sim.serve_forever, daemon=True).start()
         a.inverter, a.inverter_port = "127.0.0.1", sim.server_address[1]
-    if not a.inverter:
-        p.error("give the inverter's IP with --inverter (or EZ1_HOST), or try --demo")
+    if a.scan is not None or not a.inverter:
+        from .scan import local_networks, scan
+        nets = a.scan or [str(n) for n in local_networks()]
+        if not nets:
+            p.error("couldn't work out your network; pass one, e.g. --scan 192.168.1.0/24")
+        print(f"Scanning {', '.join(nets)} for EZ1 inverters on port {a.inverter_port}...", file=sys.stderr)
+        found = scan(nets, a.inverter_port)
+        for d in found:
+            print(f"  {d['host']}  {d['device_id']}  {d['firmware']}  (Wi-Fi: {d['ssid']})", file=sys.stderr)
+        if not found:
+            print("No EZ1 found. Check that Local Mode is switched on (Continuous) in the AP EasyPower app, "
+                  "that the panels have sun (the EZ1 is off at night), and that this computer is on the "
+                  "same network as the inverter. Your router's list of connected devices also shows its IP.",
+                  file=sys.stderr)
+            return 1
+        if a.scan is not None:
+            return 0
+        if len(found) > 1:
+            print("Several inverters found; pick one with --inverter IP.", file=sys.stderr)
+            return 1
+        a.inverter = found[0]["host"]
+        print(f"Using {a.inverter}. Next time you can start with: --inverter {a.inverter}", file=sys.stderr)
 
     client = EZ1Client(a.inverter, a.inverter_port)
     if a.check:

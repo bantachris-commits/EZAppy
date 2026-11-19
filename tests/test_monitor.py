@@ -32,6 +32,12 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(set(s["alarms"]), {"off_grid", "dc1_short_circuit", "dc2_short_circuit", "output_fault"})
         self.assertFalse(any(s["alarms"].values()))
 
+    def test_scan_finds_simulator(self):
+        from ez1monitor.scan import scan
+        found = scan(["127.0.0.1/32"], port=self.sim.server_address[1])
+        self.assertEqual([d["device_id"] for d in found], ["E07000000001"])
+        self.assertEqual(scan(["127.0.0.1/32"], port=1), [])
+
     def test_unreachable_raises(self):
         with self.assertRaises(EZ1Error):
             EZ1Client("127.0.0.1", 1, timeout=1).output_data()

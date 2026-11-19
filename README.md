@@ -15,8 +15,24 @@ Needs only **Python 3.9+**: no packages to install.
 ## 1. Turn on Local Mode on the inverter
 
 In the **AP EasyPower** phone app, connect to the inverter, open **Settings → Local Mode**, switch it
-on and choose **Continuous**. Note the **IP address** it shows (e.g. `192.168.1.50`). It's worth
-reserving that address in your router (DHCP reservation) so it doesn't change.
+on and choose **Continuous**. The inverter only answers on the network once Local Mode is on.
+
+### Finding the inverter's IP
+
+Let the app find it (do this in daylight, from a computer on the same network):
+
+```bash
+python -m ez1monitor --scan
+```
+
+It checks every address on your network for an EZ1 and prints what it finds. If your computer is on
+more than one network, or you get nothing back, name the network: `--scan 192.168.1.0/24`.
+If you just run `python -m ez1monitor` with no `--inverter`, it scans first and uses the inverter it
+finds.
+
+Other places to find the IP: the Local Mode page in the app (some app versions show it only after
+Local Mode is on), or your router's list of connected devices. It's worth reserving that address in
+your router (DHCP reservation) so it doesn't change.
 
 ## 2. Run it
 
@@ -45,7 +61,8 @@ python -m ez1monitor --demo
 
 | Option | Default | What it does |
 |---|---|---|
-| `--inverter IP` | `$EZ1_HOST` | The EZ1's IP address |
+| `--inverter IP` | `$EZ1_HOST` | The EZ1's IP address (if left out, the app scans for it) |
+| `--scan [NET]` | | List EZ1 inverters on the network and exit |
 | `--port N` | `8080` | Dashboard port |
 | `--bind ADDR` | `127.0.0.1` | Use `0.0.0.0` to open the dashboard from other devices on your LAN |
 | `--interval S` | `15` | Seconds between readings (the poller drops to once a minute while the inverter is offline) |
